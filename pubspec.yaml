@@ -1,0 +1,170 @@
+name: gobeyond
+description: A travel booking and management mobile application with offline-first SQLite backend.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ============================================
+  # STATE MANAGEMENT
+  # ============================================
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+
+  # ============================================
+  # LOCAL DATABASE
+  # ============================================
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  path_provider: ^2.1.1
+  shared_preferences: ^2.2.2
+
+  # ============================================
+  # FUNCTIONAL PROGRAMMING & ERROR HANDLING
+  # ============================================
+  dartz: ^0.10.1
+  equatable: ^2.0.5
+
+  # ============================================
+  # NETWORKING (for future API integration)
+  # ============================================
+  http: ^1.1.0
+  dio: ^5.4.0
+  connectivity_plus: ^5.0.2
+
+  # ============================================
+  # DATA SERIALIZATION
+  # ============================================
+  json_annotation: ^4.8.1
+  freezed_annotation: ^2.4.1
+
+  # ============================================
+  # SECURITY
+  # ============================================
+  flutter_secure_storage: ^9.0.0
+  crypto: ^3.0.3
+  encrypt: ^5.0.3
+
+  # ============================================
+  # UI COMPONENTS
+  # ============================================
+  cached_network_image: ^3.3.0
+  shimmer: ^3.0.0
+  flutter_svg: ^2.0.9
+  lottie: ^2.7.0
+  flutter_slidable: ^3.0.1
+  pull_to_refresh: ^2.0.0
+
+  # ============================================
+  # DATE & TIME
+  # ============================================
+  intl: ^0.18.1
+  table_calendar: ^3.0.9
+  syncfusion_flutter_datepicker: ^24.1.41
+
+  # ============================================
+  # NAVIGATION
+  # ============================================
+  go_router: ^12.1.3
+
+  # ============================================
+  # NOTIFICATIONS
+  # ============================================
+  flutter_local_notifications: ^16.3.0
+
+  # ============================================
+  # IMAGE HANDLING
+  # ============================================
+  image_picker: ^1.0.5
+  # image_cropper: ^5.0.1  # Disabled for now due to web compatibility
+
+  # ============================================
+  # UTILITIES
+  # ============================================
+  uuid: ^4.2.2
+  share_plus: ^7.2.1
+  url_launcher: ^6.2.2
+  permission_handler: ^11.1.0
+  package_info_plus: ^5.0.1
+  device_info_plus: ^9.1.1
+
+  # ============================================
+  # ANIMATIONS
+  # ============================================
+  animations: ^2.0.11
+  flutter_animate: ^4.3.0
+
+  # ============================================
+  # MAPS & LOCATION
+  # ============================================
+  geolocator: ^10.1.0
+  geocoding: ^2.1.1
+  google_maps_flutter: ^2.5.0
+
+  # ============================================
+  # CHARTS & ANALYTICS
+  # ============================================
+  fl_chart: ^0.65.0
+
+  # ============================================
+  # QR CODE
+  # ============================================
+  qr_flutter: ^4.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # ============================================
+  # LINTING & CODE QUALITY
+  # ============================================
+  flutter_lints: ^3.0.1
+  very_good_analysis: ^5.1.0
+
+  # ============================================
+  # CODE GENERATION
+  # ============================================
+  build_runner: ^2.4.7
+  riverpod_generator: ^2.3.9
+  json_serializable: ^6.7.1
+  freezed: ^2.4.5
+
+  # ============================================
+  # TESTING
+  # ============================================
+  mockito: ^5.4.4
+  mocktail: ^1.0.1
+  faker: ^2.1.0
+  integration_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+
+  # ============================================
+  # ASSETS
+  # ============================================
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/animations/
+    - assets/fonts/
+
+  # ============================================
+  # FONTS
+  # ============================================
+  # fonts:
+  #   - family: Poppins
+  #     fonts:
+  #       - asset: assets/fonts/Poppins-Regular.ttf
+  #       - asset: assets/fonts/Poppins-Medium.ttf
+  #         weight: 500
+  #       - asset: assets/fonts/Poppins-SemiBold.ttf
+  #         weight: 600
+  #       - asset: assets/fonts/Poppins-Bold.ttf
+  #         weight: 700
