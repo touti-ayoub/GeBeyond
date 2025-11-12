@@ -1,5 +1,9 @@
 # GoBeyond — Travel Booking App
 
+<p align="center">
+  <img width="364" height="228" alt="image" src="https://github.com/user-attachments/assets/3a08142b-9458-4ecd-8498-fc6c85793402" />
+</p>
+
 GoBeyond is a Flutter app for discovering listings (hotels, flights, activities), booking trips with secure Stripe payments, leaving reviews, managing wishlists, and tracking rewards — all backed by an offline-first SQLite storage layer.
 
 ## Highlights
