@@ -22,6 +22,15 @@ class _BookingScreenState extends State<BookingScreen>
     _initializeBookings();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload bookings when screen becomes visible
+    if (_bookingService.isInitialized) {
+      _bookingService.loadBookings();
+    }
+  }
+
   Future<void> _initializeBookings() async {
     await _bookingService.initialize();
     _bookingService.addListener(_onBookingsChanged);

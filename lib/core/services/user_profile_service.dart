@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_service.dart';
+import 'package:intl/intl.dart';
 
 /// User Profile Service - Manages user profile data with SharedPreferences
 class UserProfileService extends ChangeNotifier {
@@ -7,13 +9,14 @@ class UserProfileService extends ChangeNotifier {
   factory UserProfileService() => _instance;
   UserProfileService._internal();
 
+  final _authService = AuthService.instance;
   SharedPreferences? _prefs;
   bool _isInitialized = false;
 
   // User profile data
-  String _name = 'Sarah Johnson';
-  String _email = 'sarah.johnson@email.com';
-  String _phone = '+1 (555) 123-4567';
+  String _name = 'Guest User';
+  String _email = '';
+  String _phone = '';
   String _bio = 'Travel enthusiast exploring the world 🌍';
   String _joinDate = 'January 2024';
   String _memberLevel = 'Bronze Member';
@@ -57,18 +60,36 @@ class UserProfileService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Load profile data from SharedPreferences
+  /// Load profile data from SharedPreferences and AuthService
   Future<void> loadProfile() async {
     if (_prefs == null) {
       await initialize();
       return;
     }
 
-    _name = _prefs!.getString(_keyName) ?? 'Sarah Johnson';
-    _email = _prefs!.getString(_keyEmail) ?? 'sarah.johnson@email.com';
-    _phone = _prefs!.getString(_keyPhone) ?? '+1 (555) 123-4567';
+    // Load from AuthService if user is logged in
+    if (_authService.isLoggedIn && _authService.currentUser != null) {
+      final user = _authService.currentUser!;
+      _name = user.name;
+      _email = user.email;
+      _phone = user.phone ?? '';
+
+      // Format join date from user creation date
+      _joinDate = DateFormat('MMMM yyyy').format(user.createdAt);
+
+      if (kDebugMode) {
+        print('📊 Profile loaded from AuthService: $_name');
+      }
+    } else {
+      // Fallback to SharedPreferences if no user logged in
+      _name = _prefs!.getString(_keyName) ?? 'Guest User';
+      _email = _prefs!.getString(_keyEmail) ?? '';
+      _phone = _prefs!.getString(_keyPhone) ?? '';
+      _joinDate = _prefs!.getString(_keyJoinDate) ?? DateFormat('MMMM yyyy').format(DateTime.now());
+    }
+
+    // Load other data from SharedPreferences
     _bio = _prefs!.getString(_keyBio) ?? 'Travel enthusiast exploring the world 🌍';
-    _joinDate = _prefs!.getString(_keyJoinDate) ?? 'January 2024';
     _memberLevel = _prefs!.getString(_keyMemberLevel) ?? 'Bronze Member';
     _points = _prefs!.getInt(_keyPoints) ?? 0;
     _trips = _prefs!.getInt(_keyTrips) ?? 0;

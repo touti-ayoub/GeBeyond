@@ -94,33 +94,28 @@ class _BookingFlowScreenState extends State<BookingFlowScreen> {
 
     setState(() => _isProcessing = true);
 
-    // Simulate payment processing
-    await Future.delayed(const Duration(seconds: 2));
-
-    final success = await _bookingService.createBooking(
+    // Process booking with Stripe payment
+    final result = await _bookingService.createBooking(
       listing: widget.listing,
       checkIn: _checkInDate!,
       checkOut: _checkOutDate!,
       guests: _guests,
       totalPrice: _totalPrice,
+      processPayment: true, // Enable payment processing
     );
 
     if (!mounted) return;
 
     setState(() => _isProcessing = false);
 
-    if (success) {
+    if (result['success'] == true) {
       // Update user stats (increment trips)
       await _profileService.updateStats(
         trips: _profileService.trips + 1,
       );
 
-      // Award points (1 point per dollar spent)
-      await _profileService.updatePoints(
-        _profileService.points + _totalPrice.round(),
-      );
-
       // Show success dialog
+      if (!mounted) return;
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -130,12 +125,12 @@ class _BookingFlowScreenState extends State<BookingFlowScreen> {
             color: Colors.green,
             size: 64,
           ),
-          title: const Text('Booking Confirmed!'),
+          title: const Text('Payment Successful!'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Your booking has been confirmed.',
+                'Your booking has been confirmed and payment processed.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -148,15 +143,24 @@ class _BookingFlowScreenState extends State<BookingFlowScreen> {
                 child: Column(
                   children: [
                     Text(
-                      '+${_totalPrice.round()} Points',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      'Booking: ${result['bookingReference']}',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Payment ID: ${result['paymentIntentId']}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '+${_totalPrice.round()} Points Earned',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).colorScheme.primary,
                       ),
-                    ),
-                    Text(
-                      'Added to your account',
-                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
                 ),
@@ -175,10 +179,41 @@ class _BookingFlowScreenState extends State<BookingFlowScreen> {
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Booking failed. Please try again.'),
-          backgroundColor: Colors.red,
+      // Show error dialog
+      final errorMessage = result['error'] ?? 'Payment failed. Please try again.';
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          icon: const Icon(
+            Icons.error_outline,
+            color: Colors.red,
+            size: 64,
+          ),
+          title: const Text('Payment Failed'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                errorMessage,
+                textAlign: TextAlign.center,
+              ),
+              if (result['errorCode'] != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Error Code: ${result['errorCode']}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Try Again'),
+            ),
+          ],
         ),
       );
     }

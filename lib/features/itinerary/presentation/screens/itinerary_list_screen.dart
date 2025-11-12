@@ -351,7 +351,6 @@ class _ItineraryListScreenState extends State<ItineraryListScreen>
                 }
 
                 final id = await _itineraryService.createItinerary(
-                  userId: 1,
                   title: titleController.text,
                   startDate: startDate,
                   endDate: endDate,
@@ -460,7 +459,6 @@ class _ItineraryListScreenState extends State<ItineraryListScreen>
               onPressed: () async {
                 await _itineraryService.updateItinerary(
                   id: itinerary.id!,
-                  userId: 1,
                   title: titleController.text,
                   startDate: startDate,
                   endDate: endDate,

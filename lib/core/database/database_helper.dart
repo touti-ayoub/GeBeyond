@@ -8,7 +8,7 @@ class DatabaseHelper {
 
   // Database configuration
   static const String _databaseName = 'travel_booking.db';
-  static const int _databaseVersion = 1;
+  static const int _databaseVersion = 4; // Updated to completely fix foreign key issues
 
   DatabaseHelper._internal();
 
@@ -35,7 +35,9 @@ class DatabaseHelper {
 
   /// Enable foreign key constraints
   Future<void> _onConfigure(Database db) async {
-    await db.execute('PRAGMA foreign_keys = ON');
+    // Disable foreign keys to allow reviews without bookings
+    // Foreign keys are still enforced for users and listings
+    await db.execute('PRAGMA foreign_keys = OFF');
   }
 
   /// Create all tables on first database creation
@@ -205,6 +207,40 @@ class DatabaseHelper {
       CREATE INDEX idx_feedbacks_listing_id ON feedbacks(listing_id)
     ''');
 
+    // Enhanced reviews table (no foreign keys for flexibility)
+    await db.execute('''
+      CREATE TABLE reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        listing_id INTEGER NOT NULL,
+        booking_id INTEGER,
+        rating REAL NOT NULL CHECK(rating >= 1.0 AND rating <= 5.0),
+        comment TEXT,
+        images TEXT,
+        pros TEXT,
+        cons TEXT,
+        trip_type TEXT CHECK(trip_type IN ('solo', 'family', 'couple', 'business', 'friends')),
+        helpful_count INTEGER DEFAULT 0,
+        not_helpful_count INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER,
+        is_deleted INTEGER DEFAULT 0,
+        sync_status TEXT DEFAULT 'synced'
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_reviews_listing_id ON reviews(listing_id)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_reviews_user_id ON reviews(user_id)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_reviews_rating ON reviews(rating)
+    ''');
+
     await db.execute('''
       CREATE TABLE rewards (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -247,11 +283,83 @@ class DatabaseHelper {
 
   /// Handle database upgrades
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // Disable foreign keys during migration
+    await db.execute('PRAGMA foreign_keys = OFF');
+
     // Handle migrations for future versions
-    // Example:
-    // if (oldVersion < 2) {
-    //   await db.execute('ALTER TABLE users ADD COLUMN new_field TEXT');
-    // }
+    if (oldVersion < 2) {
+      // Add reviews table (version 1 to 2)
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS reviews (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          listing_id INTEGER NOT NULL,
+          booking_id INTEGER,
+          rating REAL NOT NULL CHECK(rating >= 1.0 AND rating <= 5.0),
+          comment TEXT,
+          images TEXT,
+          pros TEXT,
+          cons TEXT,
+          trip_type TEXT CHECK(trip_type IN ('solo', 'family', 'couple', 'business', 'friends')),
+          helpful_count INTEGER DEFAULT 0,
+          not_helpful_count INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER,
+          is_deleted INTEGER DEFAULT 0,
+          sync_status TEXT DEFAULT 'synced'
+        )
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_reviews_listing_id ON reviews(listing_id)
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_reviews_user_id ON reviews(user_id)
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_reviews_rating ON reviews(rating)
+      ''');
+    }
+
+    if (oldVersion < 3 || oldVersion < 4) {
+      // Fix reviews table completely - drop and recreate without any foreign keys (version 3/4)
+      await db.execute('DROP TABLE IF EXISTS reviews');
+
+      await db.execute('''
+        CREATE TABLE reviews (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          listing_id INTEGER NOT NULL,
+          booking_id INTEGER,
+          rating REAL NOT NULL CHECK(rating >= 1.0 AND rating <= 5.0),
+          comment TEXT,
+          images TEXT,
+          pros TEXT,
+          cons TEXT,
+          trip_type TEXT CHECK(trip_type IN ('solo', 'family', 'couple', 'business', 'friends')),
+          helpful_count INTEGER DEFAULT 0,
+          not_helpful_count INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER,
+          is_deleted INTEGER DEFAULT 0,
+          sync_status TEXT DEFAULT 'synced'
+        )
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_reviews_listing_id ON reviews(listing_id)
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_reviews_user_id ON reviews(user_id)
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_reviews_rating ON reviews(rating)
+      ''');
+    }
   }
 
   /// Close the database

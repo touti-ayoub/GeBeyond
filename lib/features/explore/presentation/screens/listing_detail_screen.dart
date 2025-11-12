@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/services/wishlist_service.dart';
+import '../../../../core/services/reviews_service.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../../../core/utils/location_helper.dart';
+import '../../../../core/config/google_maps_config.dart';
 import '../../../booking/presentation/screens/booking_flow_screen.dart';
+import '../../../reviews/domain/entities/review.dart';
+import '../../../reviews/presentation/screens/reviews_list_screen.dart';
+import '../../../reviews/presentation/screens/write_review_screen.dart';
+import '../../../reviews/presentation/widgets/review_card.dart';
+import '../../../common/presentation/widgets/map_tiler_widget.dart';
 
 class ListingDetailScreen extends StatefulWidget {
   final Map<String, dynamic> listing;
@@ -19,43 +28,42 @@ class _ListingDetailScreenState extends State<ListingDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _wishlistService = WishlistService();
+  final _reviewsService = ReviewsService();
+  final _authService = AuthService.instance;
   int _selectedImageIndex = 0;
 
-  final List<Map<String, dynamic>> _reviews = [
-    {
-      'name': 'Sarah Johnson',
-      'rating': 5.0,
-      'date': '2 days ago',
-      'comment': 'Absolutely amazing experience! The place exceeded all expectations. Would definitely recommend to anyone.',
-      'avatar': 'S',
-    },
-    {
-      'name': 'Michael Chen',
-      'rating': 4.5,
-      'date': '1 week ago',
-      'comment': 'Great location and wonderful amenities. Minor issues with check-in but staff was very helpful.',
-      'avatar': 'M',
-    },
-    {
-      'name': 'Emma Williams',
-      'rating': 5.0,
-      'date': '2 weeks ago',
-      'comment': 'Perfect for families! Kids loved it and we had an unforgettable time. Will be back!',
-      'avatar': 'E',
-    },
-    {
-      'name': 'David Martinez',
-      'rating': 4.0,
-      'date': '3 weeks ago',
-      'comment': 'Good value for money. Clean and comfortable. Location could be better but overall satisfied.',
-      'avatar': 'D',
-    },
-  ];
+  List<Review> _reviews = [];
+  ReviewStats? _reviewStats;
+  bool _isLoadingReviews = true;
+
+  // Old hardcoded reviews removed - now using real data from database
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadReviews();
+  }
+
+  Future<void> _loadReviews() async {
+    try {
+      final listingId = widget.listing['id'] as int;
+      final reviews = await _reviewsService.getReviewsByListing(listingId);
+      final stats = await _reviewsService.getReviewStats(listingId);
+
+      if (mounted) {
+        setState(() {
+          _reviews = reviews;
+          _reviewStats = stats;
+          _isLoadingReviews = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingReviews = false);
+      }
+      print('Error loading reviews: $e');
+    }
   }
 
   @override
@@ -467,135 +475,431 @@ class _ListingDetailScreenState extends State<ListingDetailScreen>
   Widget _buildReviewsTab() {
     final theme = Theme.of(context);
 
+    if (_isLoadingReviews) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         // Rating Overview
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Column(
-                children: [
-                  Text(
-                    widget.listing['rating'].toString(),
-                    style: theme.textTheme.displayLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                  Row(
-                    children: List.generate(
-                      5,
-                      (index) => Icon(
-                        index < widget.listing['rating'].floor()
-                            ? Icons.star
-                            : Icons.star_border,
-                        color: Colors.amber,
-                        size: 20,
+        if (_reviewStats != null) ...[
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Column(
+                  children: [
+                    Text(
+                      _reviewStats!.averageRating.toStringAsFixed(1),
+                      style: theme.textTheme.displayLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onPrimaryContainer,
                       ),
                     ),
+                    Row(
+                      children: List.generate(
+                        5,
+                        (index) => Icon(
+                          index < _reviewStats!.averageRating.floor()
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: Colors.amber,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${_reviewStats!.totalReviews} reviews',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 24),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildRatingBar('5 stars', _reviewStats!.getRatingPercentage(5) / 100),
+                      _buildRatingBar('4 stars', _reviewStats!.getRatingPercentage(4) / 100),
+                      _buildRatingBar('3 stars', _reviewStats!.getRatingPercentage(3) / 100),
+                      _buildRatingBar('2 stars', _reviewStats!.getRatingPercentage(2) / 100),
+                      _buildRatingBar('1 star', _reviewStats!.getRatingPercentage(1) / 100),
+                    ],
                   ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+
+        // Action Buttons
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  final result = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => WriteReviewScreen(
+                        listingId: widget.listing['id'],
+                        listingTitle: widget.listing['title'],
+                      ),
+                    ),
+                  );
+                  if (result == true) {
+                    _loadReviews(); // Reload reviews after writing
+                  }
+                },
+                icon: const Icon(Icons.rate_review),
+                label: const Text('Write Review'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.primary,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ReviewsListScreen(
+                        listingId: widget.listing['id'],
+                        listingTitle: widget.listing['title'],
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.list),
+                label: const Text('View All'),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 24),
+
+        // Reviews List
+        if (_reviews.isEmpty) ...[
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.rate_review_outlined,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
                   Text(
-                    '${_reviews.length} reviews',
-                    style: theme.textTheme.bodySmall,
+                    'No reviews yet',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Be the first to share your experience!',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[600],
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Column(
-                  children: [
-                    _buildRatingBar('5 stars', 0.8),
-                    _buildRatingBar('4 stars', 0.15),
-                    _buildRatingBar('3 stars', 0.05),
-                    _buildRatingBar('2 stars', 0.0),
-                    _buildRatingBar('1 star', 0.0),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'Recent Reviews',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
+        ] else ...[
+          Text(
+            'Recent Reviews',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
-        ..._reviews.map((review) => _buildReviewCard(review)),
+          const SizedBox(height: 16),
+          // Show first 3 reviews
+          ...(_reviews.take(3).map((review) {
+            final currentUserId = _authService.currentUser?.id;
+            final isUserReview = currentUserId != null && review.userId == currentUserId;
+
+            return ReviewCard(
+                review: review,
+                isUserReview: isUserReview,
+                onHelpfulTap: () async {
+                  await _reviewsService.markHelpful(review.id!, true);
+                  _loadReviews();
+                },
+                onEditTap: isUserReview
+                    ? () async {
+                        final result = await Navigator.push<bool>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => WriteReviewScreen(
+                              listingId: widget.listing['id'],
+                              listingTitle: widget.listing['title'],
+                              existingReview: review,
+                            ),
+                          ),
+                        );
+                        if (result == true) {
+                          _loadReviews();
+                        }
+                      }
+                    : null,
+                onDeleteTap: isUserReview
+                    ? () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Delete Review'),
+                            content: const Text(
+                                'Are you sure you want to delete this review?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Cancel'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red),
+                                child: const Text('Delete'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true && review.id != null) {
+                          await _reviewsService.deleteReview(
+                              review.id!, widget.listing['id']);
+                          _loadReviews();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Review deleted')),
+                            );
+                          }
+                        }
+                      }
+                    : null,
+              );
+          })),
+        ],
       ],
     );
   }
 
   Widget _buildLocationTab() {
     final theme = Theme.of(context);
+    final location = widget.listing['location'] as String;
+    final coordinates = LocationHelper.getCoordinates(location);
+    final nearbyPlaces = LocationHelper.getNearbyPlaces(location);
+
+    if (!MapTilerConfig.enableMaps || coordinates == null) {
+      // Fallback UI if maps disabled or no coordinates
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'Location',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            height: 200,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.map,
+                    size: 64,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Configure MapTiler API Key',
+                    style: theme.textTheme.bodyLarge,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Icon(Icons.location_on, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  location,
+                  style: theme.textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text(
-          'Location',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
+        // Map Container using MapTiler
         Container(
-          height: 200,
+          height: 300,
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.map,
-                  size: 64,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Map view coming soon',
-                  style: theme.textTheme.bodyLarge,
-                ),
-              ],
-            ),
+          clipBehavior: Clip.antiAlias,
+          child: MapTilerWidget(
+            latitude: coordinates.latitude,
+            longitude: coordinates.longitude,
+            zoom: MapTilerConfig.detailZoom,
+            showMarker: true,
           ),
         ),
-        const SizedBox(height: 16),
+
+        const SizedBox(height: 24),
+
+        // Location Address
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.location_on, color: theme.colorScheme.primary),
-            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.location_on,
+                color: theme.colorScheme.primary,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                widget.listing['location'],
-                style: theme.textTheme.titleMedium,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Address',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    location,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
+
         const SizedBox(height: 24),
+
+        // Nearby Places
         Text(
           'Nearby Places',
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 12),
-        _buildNearbyPlace('Airport', '15 min drive', Icons.flight),
-        _buildNearbyPlace('Beach', '5 min walk', Icons.beach_access),
-        _buildNearbyPlace('Restaurant', '2 min walk', Icons.restaurant),
-        _buildNearbyPlace('Shopping Mall', '10 min drive', Icons.shopping_bag),
+        const SizedBox(height: 16),
+
+        ...nearbyPlaces.map((place) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    place['icon'],
+                    color: theme.colorScheme.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    place['name'],
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Text(
+                  place['distance'],
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        )).toList(),
+
+        const SizedBox(height: 16),
+
+        // Get Directions Button
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              // Open in Google Maps app
+              // In a real app, you would use url_launcher to open maps
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Opening in Google Maps...'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            icon: const Icon(Icons.directions),
+            label: const Text('Get Directions'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              side: BorderSide(color: theme.colorScheme.primary, width: 2),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -665,71 +969,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen>
     );
   }
 
-  Widget _buildReviewCard(Map<String, dynamic> review) {
-    final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: theme.colorScheme.primary,
-                  child: Text(
-                    review['avatar'],
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        review['name'],
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        review['date'],
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Row(
-                  children: [
-                    const Icon(Icons.star, color: Colors.amber, size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      review['rating'].toString(),
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              review['comment'],
-              style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildNearbyPlace(String name, String distance, IconData icon) {
     final theme = Theme.of(context);

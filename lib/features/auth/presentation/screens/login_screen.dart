@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/user_profile_service.dart';
+import '../../../../core/services/wishlist_service.dart';
+import '../../../../core/services/booking_service.dart';
+import '../../../../core/services/itinerary_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,6 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService.instance;
   bool _obscurePassword = true;
   bool _isLoading = false;
 
@@ -27,14 +33,104 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    // Simulate login delay
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      final result = await _authService.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    // For now, just navigate to explore (main app)
-    // TODO: Implement actual authentication
-    context.go('/explore');
+      if (result['success']) {
+        // Initialize user profile data
+        await _initializeUserData();
+
+        // Initialize services with user data
+        await _initializeUserServices();
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Welcome back!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Navigate to explore screen
+        context.go('/explore');
+      } else {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message']),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Login error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  /// Initialize user profile data (for users registered before profile system)
+  Future<void> _initializeUserData() async {
+    try {
+      final user = _authService.currentUser;
+      if (user == null) return;
+
+      final _profileService = UserProfileService();
+      await _profileService.initialize();
+
+      // Check if profile already exists
+      final name = _profileService.name;
+      if (name.isEmpty) {
+        // First time login after registration - initialize profile
+        final now = DateTime.now();
+        final months = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        final joinDate = '${months[now.month - 1]} ${now.year}';
+
+        // Save user profile data from auth user
+        await _profileService.saveProfile(
+          name: user.name,
+          email: user.email,
+          phone: user.phone ?? '',
+          bio: 'New traveler ready to explore! 🌍',
+        );
+
+        // Initialize new account with Bronze member, 0 points, 0 stats
+        await _profileService.updateMemberLevel('Bronze Member');
+        await _profileService.updatePoints(0);
+        await _profileService.updateStats(trips: 0, countries: 0, reviews: 0);
+        await _profileService.updateJoinDate(joinDate);
+      }
+    } catch (e) {
+      print('Error initializing user data: $e');
+    }
+  }
+
+  /// Initialize all user-specific services
+  Future<void> _initializeUserServices() async {
+    try {
+      await WishlistService().initialize();
+      await BookingService().initialize();
+      await ItineraryService().initialize();
+    } catch (e) {
+      print('Error initializing services: $e');
+    }
   }
 
   @override

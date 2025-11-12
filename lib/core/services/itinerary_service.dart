@@ -1,18 +1,20 @@
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:gobeyond/core/database/database_helper.dart';
+import 'package:gobeyond/core/services/auth_service.dart';
 import 'package:gobeyond/features/itinerary/data/models/itinerary_model.dart';
 import 'package:gobeyond/features/itinerary/data/models/itinerary_item_model.dart';
 import 'package:gobeyond/features/itinerary/domain/entities/itinerary.dart';
 import 'package:gobeyond/features/itinerary/domain/entities/itinerary_item.dart';
 
-/// Itinerary Service - Manages user itineraries
+/// Itinerary Service - Manages user itineraries with authentication
 class ItineraryService extends ChangeNotifier {
   static final ItineraryService _instance = ItineraryService._internal();
   factory ItineraryService() => _instance;
   ItineraryService._internal();
 
   Database? _db;
+  final _authService = AuthService.instance;
   List<Itinerary> _itineraries = [];
   Map<int, List<ItineraryItem>> _itineraryItems = {};
   bool _isInitialized = false;
@@ -35,11 +37,20 @@ class ItineraryService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Load itineraries for a user
-  Future<void> loadItineraries({int userId = 1}) async {
+  /// Load itineraries for current user
+  Future<void> loadItineraries() async {
     if (_db == null) await initialize();
 
     try {
+      if (_authService.currentUser == null) {
+        _itineraries = [];
+        _itineraryItems = {};
+        notifyListeners();
+        return;
+      }
+
+      final userId = _authService.currentUser!.id!;
+
       final List<Map<String, dynamic>> maps = await _db!.query(
         'itineraries',
         where: 'user_id = ? AND is_deleted = 0',
@@ -87,7 +98,6 @@ class ItineraryService extends ChangeNotifier {
 
   /// Create a new itinerary
   Future<int?> createItinerary({
-    required int userId,
     required String title,
     required DateTime startDate,
     required DateTime endDate,
@@ -96,7 +106,15 @@ class ItineraryService extends ChangeNotifier {
   }) async {
     if (_db == null) await initialize();
 
+    if (_authService.currentUser == null) {
+      if (kDebugMode) {
+        print('User not logged in');
+      }
+      return null;
+    }
+
     try {
+      final userId = _authService.currentUser!.id!;
       final now = DateTime.now();
       final itinerary = ItineraryModel(
         userId: userId,
@@ -109,7 +127,7 @@ class ItineraryService extends ChangeNotifier {
       );
 
       final id = await _db!.insert('itineraries', itinerary.toMap());
-      await loadItineraries(userId: userId);
+      await loadItineraries();
       return id;
     } catch (e) {
       if (kDebugMode) {
@@ -122,7 +140,6 @@ class ItineraryService extends ChangeNotifier {
   /// Update an itinerary
   Future<bool> updateItinerary({
     required int id,
-    required int userId,
     String? title,
     DateTime? startDate,
     DateTime? endDate,
@@ -130,6 +147,10 @@ class ItineraryService extends ChangeNotifier {
     String? notes,
   }) async {
     if (_db == null) await initialize();
+
+    if (_authService.currentUser == null) {
+      return false;
+    }
 
     try {
       final existing = _itineraries.firstWhere((i) => i.id == id);
@@ -149,7 +170,7 @@ class ItineraryService extends ChangeNotifier {
         whereArgs: [id],
       );
 
-      await loadItineraries(userId: userId);
+      await loadItineraries();
       return true;
     } catch (e) {
       if (kDebugMode) {
@@ -160,8 +181,12 @@ class ItineraryService extends ChangeNotifier {
   }
 
   /// Delete an itinerary
-  Future<bool> deleteItinerary(int id, {int userId = 1}) async {
+  Future<bool> deleteItinerary(int id) async {
     if (_db == null) await initialize();
+
+    if (_authService.currentUser == null) {
+      return false;
+    }
 
     try {
       await _db!.update(
@@ -171,7 +196,7 @@ class ItineraryService extends ChangeNotifier {
         whereArgs: [id],
       );
 
-      await loadItineraries(userId: userId);
+      await loadItineraries();
       return true;
     } catch (e) {
       if (kDebugMode) {
