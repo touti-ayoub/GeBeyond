@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:gobeyond/core/database/database_helper.dart';
 import 'package:gobeyond/features/rewards/data/models/reward_model.dart';
 import 'package:gobeyond/features/rewards/domain/entities/reward.dart';
+import 'auth_service.dart';
 
 /// Rewards Service - Manages user rewards and loyalty points
 class RewardsService extends ChangeNotifier {
@@ -10,6 +11,7 @@ class RewardsService extends ChangeNotifier {
   factory RewardsService() => _instance;
   RewardsService._internal();
 
+  final _authService = AuthService.instance;
   Database? _db;
   List<Reward> _rewards = [];
   int _totalPoints = 0;
@@ -40,14 +42,31 @@ class RewardsService extends ChangeNotifier {
   }
 
   /// Load rewards for a user
-  Future<void> loadRewards({int userId = 1}) async {
+  Future<void> loadRewards({int? userId}) async {
     if (_db == null) await initialize();
 
+    // Use current logged-in user if userId not provided
+    final currentUserId = userId ?? _authService.currentUser?.id;
+
+    if (currentUserId == null) {
+      if (kDebugMode) {
+        print('⚠️ Cannot load rewards: No user logged in');
+      }
+      _rewards = [];
+      _totalPoints = 0;
+      notifyListeners();
+      return;
+    }
+
     try {
+      if (kDebugMode) {
+        print('🎁 Loading rewards for user ID: $currentUserId');
+      }
+
       final List<Map<String, dynamic>> maps = await _db!.query(
         'rewards',
         where: 'user_id = ? AND is_deleted = 0',
-        whereArgs: [userId],
+        whereArgs: [currentUserId],
         orderBy: 'created_at DESC',
       );
 
@@ -58,11 +77,18 @@ class RewardsService extends ChangeNotifier {
           .where((r) => !r.isRedeemed && !r.isDeleted)
           .fold(0, (sum, reward) => sum + reward.points);
 
+      if (kDebugMode) {
+        print('✅ Loaded ${_rewards.length} rewards, total points: $_totalPoints');
+      }
+
       notifyListeners();
     } catch (e) {
       if (kDebugMode) {
-        print('Error loading rewards: $e');
+        print('❌ Error loading rewards: $e');
       }
+      _rewards = [];
+      _totalPoints = 0;
+      notifyListeners();
     }
   }
 
@@ -132,8 +158,11 @@ class RewardsService extends ChangeNotifier {
   }
 
   /// Redeem a reward
-  Future<bool> redeemReward(int id, {int userId = 1}) async {
+  Future<bool> redeemReward(int id, {int? userId}) async {
     if (_db == null) await initialize();
+
+    final currentUserId = userId ?? _authService.currentUser?.id;
+    if (currentUserId == null) return false;
 
     try {
       final reward = _rewards.firstWhere((r) => r.id == id);
@@ -158,7 +187,7 @@ class RewardsService extends ChangeNotifier {
         whereArgs: [id],
       );
 
-      await loadRewards(userId: userId);
+      await loadRewards(userId: currentUserId);
       return true;
     } catch (e) {
       if (kDebugMode) {
@@ -169,8 +198,11 @@ class RewardsService extends ChangeNotifier {
   }
 
   /// Delete a reward
-  Future<bool> deleteReward(int id, {int userId = 1}) async {
+  Future<bool> deleteReward(int id, {int? userId}) async {
     if (_db == null) await initialize();
+
+    final currentUserId = userId ?? _authService.currentUser?.id;
+    if (currentUserId == null) return false;
 
     try {
       await _db!.update(
@@ -180,7 +212,7 @@ class RewardsService extends ChangeNotifier {
         whereArgs: [id],
       );
 
-      await loadRewards(userId: userId);
+      await loadRewards(userId: currentUserId);
       return true;
     } catch (e) {
       if (kDebugMode) {

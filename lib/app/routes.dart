@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gobeyond/features/auth/presentation/screens/login_screen.dart';
 import 'package:gobeyond/features/auth/presentation/screens/register_screen.dart';
-import 'package:gobeyond/features/auth/presentation/screens/splash_screen.dart';
+import 'package:gobeyond/features/onboarding/presentation/screens/splash_screen.dart';
+import 'package:gobeyond/features/onboarding/presentation/screens/onboarding_screen.dart';
 import 'package:gobeyond/features/explore/presentation/screens/explore_screen.dart';
 import 'package:gobeyond/features/booking/presentation/screens/booking_screen.dart';
 import 'package:gobeyond/features/booking/presentation/screens/booking_detail_screen.dart';
@@ -20,13 +21,22 @@ final goRouter = GoRouter(
   debugLogDiagnostics: true,
   routes: [
     // ============================================
-    // SPLASH & AUTH ROUTES
+    // SPLASH & ONBOARDING ROUTES
     // ============================================
     GoRoute(
       path: '/',
       name: 'splash',
       builder: (context, state) => const SplashScreen(),
     ),
+    GoRoute(
+      path: '/onboarding',
+      name: 'onboarding',
+      builder: (context, state) => const OnboardingScreen(),
+    ),
+
+    // ============================================
+    // AUTH ROUTES
+    // ============================================
     GoRoute(
       path: '/login',
       name: 'login',

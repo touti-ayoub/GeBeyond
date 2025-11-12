@@ -1,10 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gobeyond/core/database/database_helper.dart';
-import 'package:gobeyond/core/services/booking_service.dart';
-import 'package:gobeyond/core/services/rewards_service.dart';
-import 'package:gobeyond/core/services/wishlist_service.dart';
-import 'package:gobeyond/core/services/user_profile_service.dart';
 
 /// Utility class to manage app data and reset for new accounts
 class DataResetService {
@@ -13,75 +9,60 @@ class DataResetService {
   DataResetService._internal();
 
   /// Clear all user data - use when logging out or switching accounts
+  /// NOTE: This does NOT delete users from database, only clears their data
   Future<void> clearAllData() async {
     try {
       if (kDebugMode) {
-        print('Clearing all user data...');
+        print('Clearing current user session data...');
       }
 
-      // Clear SharedPreferences
+      // Clear SharedPreferences (session data)
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
 
-      // Clear SQLite database
-      final db = await DatabaseHelper.instance.database;
-
-      // Clear all tables
-      await db.delete('users');
-      await db.delete('listings');
-      await db.delete('bookings');
-      await db.delete('itineraries');
-      await db.delete('itinerary_items');
-      await db.delete('feedbacks');
-      await db.delete('rewards');
-      await db.delete('wishlists');
-
-      // Reset all services
-      final bookingService = BookingService();
-      final rewardsService = RewardsService();
-      final wishlistService = WishlistService();
-      final profileService = UserProfileService();
-
-      // Reload services to reflect empty state
-      await bookingService.loadBookings();
-      await rewardsService.loadRewards();
-      wishlistService.clearAll();
-      await profileService.loadProfile();
+      // DO NOT delete from database - data should persist!
+      // Only the session is cleared, user can login again to see their data
 
       if (kDebugMode) {
-        print('All user data cleared successfully');
+        print('User session cleared successfully (data preserved in database)');
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error clearing data: $e');
+        print('Error clearing session: $e');
       }
     }
   }
 
-  /// Clear only booking data
-  Future<void> clearBookings() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('user_bookings');
-    await BookingService().loadBookings();
-  }
-
-  /// Clear only rewards data
-  Future<void> clearRewards() async {
+  /// Clear only booking data for current user
+  Future<void> clearBookings(int userId) async {
     final db = await DatabaseHelper.instance.database;
-    await db.delete('rewards');
-    await RewardsService().loadRewards();
+    await db.update(
+      'bookings',
+      {'is_deleted': 1},
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
   }
 
-  /// Clear only wishlist data
-  Future<void> clearWishlist() async {
-    WishlistService().clearAll();
-  }
-
-  /// Clear only itineraries data
-  Future<void> clearItineraries() async {
+  /// Clear only rewards data for current user
+  Future<void> clearRewards(int userId) async {
     final db = await DatabaseHelper.instance.database;
-    await db.delete('itineraries');
-    await db.delete('itinerary_items');
+    await db.delete('rewards', where: 'user_id = ?', whereArgs: [userId]);
+  }
+
+  /// Clear only wishlist data for current user
+  Future<void> clearWishlist(int userId) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.delete('wishlists', where: 'user_id = ?', whereArgs: [userId]);
+  }
+
+  /// Clear only itineraries data for current user
+  Future<void> clearItineraries(int userId) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.delete('itineraries', where: 'user_id = ?', whereArgs: [userId]);
+    await db.delete('itinerary_items',
+        where: 'itinerary_id IN (SELECT id FROM itineraries WHERE user_id = ?)',
+        whereArgs: [userId]);
   }
 
   /// Check if this is a first-time user (no existing data)
@@ -98,10 +79,28 @@ class DataResetService {
   }
 
   /// Reset to factory defaults (for testing/development)
+  /// WARNING: This deletes ALL data including users!
   Future<void> factoryReset() async {
-    await clearAllData();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('has_used_app');
+    try {
+      if (kDebugMode) {
+        print('⚠️ FACTORY RESET: Deleting ALL data from database...');
+      }
+
+      // Clear SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      // Delete entire database
+      await DatabaseHelper.instance.deleteDatabase();
+
+      if (kDebugMode) {
+        print('✅ Factory reset complete - database deleted');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Error during factory reset: $e');
+      }
+    }
   }
 }
 

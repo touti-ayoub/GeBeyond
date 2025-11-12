@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/services/user_profile_service.dart';
+import '../../../../core/services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -11,7 +11,7 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _profileService = UserProfileService();
+  final _authService = AuthService.instance;
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -45,59 +45,57 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _isLoading = true);
 
-    // Initialize profile service
-    await _profileService.initialize();
-
-    // Get current date for join date
-    final now = DateTime.now();
-    final months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    final joinDate = '${months[now.month - 1]} ${now.year}';
-
-    // Save user registration data to profile
-    final success = await _profileService.saveProfile(
-      name: _nameController.text.trim(),
-      email: _emailController.text.trim(),
-      phone: '', // Empty phone initially
-      bio: 'New traveler ready to explore! 🌍', // Default bio
-    );
-
-    if (success) {
-      // Initialize new account with Bronze member, 0 points, 0 stats
-      await _profileService.updateMemberLevel('Bronze Member');
-      await _profileService.updatePoints(0);
-      await _profileService.updateStats(trips: 0, countries: 0, reviews: 0);
-      await _profileService.updateJoinDate(joinDate);
-    }
-
-    // Simulate registration delay
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (!mounted) return;
-
-    setState(() => _isLoading = false);
-
-    if (success) {
-      // Show success and navigate
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account created successfully!'),
-          backgroundColor: Colors.green,
-        ),
+    try {
+      // Register user with AuthService
+      final result = await _authService.register(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
       );
 
-      context.go('/explore');
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Registration failed. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (!mounted) return;
+
+      if (result['success']) {
+        // Clear the auto-login session from registration
+        // User must explicitly login
+        await _authService.logout();
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created successfully! Please login to continue.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        // Navigate to login screen
+        context.go('/login');
+      } else {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message']),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Registration error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

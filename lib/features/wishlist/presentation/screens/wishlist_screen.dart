@@ -372,7 +372,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                 fit: StackFit.expand,
                 children: [
                   Image.network(
-                    item['image'],
+                    item['image'] as String? ?? 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800',
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
@@ -407,11 +407,11 @@ class _WishlistScreenState extends State<WishlistScreen> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: _getTypeColor(item['type']),
+                        color: _getTypeColor(item['type'] as String? ?? 'hotel'),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        item['type'].toString().toUpperCase(),
+                        (item['type'] as String? ?? 'hotel').toString().toUpperCase(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -489,7 +489,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                   children: [
                     // Title
                     Text(
-                      item['title'],
+                      item['title'] as String? ?? 'Unknown',
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -508,7 +508,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            item['location'],
+                            item['location'] as String? ?? 'Unknown',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurface.withOpacity(0.6),
                             ),
@@ -532,7 +532,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              item['rating'].toString(),
+                              (item['rating'] ?? 0.0).toString(),
                               style: theme.textTheme.bodySmall?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
@@ -540,7 +540,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                           ],
                         ),
                         Text(
-                          '\$${item['price'].toStringAsFixed(0)}',
+                          '\$${((item['price'] as num?) ?? 0).toStringAsFixed(0)}',
                           style: theme.textTheme.titleSmall?.copyWith(
                             color: theme.colorScheme.primary,
                             fontWeight: FontWeight.bold,
