@@ -132,6 +132,7 @@ rebuild_and_run.bat
 - API keys in source are for development only. Replace them with secure storage or environment variables for production.
 - Many guides are included in the repo (STRIPE_*.md, QUICK_START_*.md, etc.).
 
+
 ## License
 This project is provided as-is for demonstration purposes. Add your preferred license here.
 
